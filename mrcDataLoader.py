@@ -1,10 +1,130 @@
 import mrcfile
 import os
 import re
+import numpy as np
+import scipy.ndimage
+from starReader import starRead
 
 
 class MrcDataLoader(object):
     # def __init__(self):
+
+    @staticmethod
+    def bin_2d(body_2d, bin_size):
+        """Do the bin process to the 2D array.
+
+        This function can make bin the image based on the bin_size.
+        bin_size is a int value. if it was set to 2, then the 4 points in a small patch 2x2 of the body_2d
+               are summed to one value. It likes an average pooling operation.
+
+        Args:
+            body_2d: numpy.array, it is a 2d array, the dim is 2.
+            bin_size: int value.
+
+        Returns:
+            return pool_result
+            pool_result: numpy.array, the shape of it is (body_2d.shape[0]/bin_size, body_2d.shape[1]/bin_size)
+
+        """
+        # based on the numpy operation to do the bin process
+        col = body_2d.shape[0]
+        row = body_2d.shape[1]
+        scale_col = col // bin_size
+        scale_row = row // bin_size
+        patch = np.copy(body_2d[0:scale_col * bin_size, 0:scale_row * bin_size])
+        patch_view = patch.reshape(scale_col, bin_size, scale_row, bin_size)
+        body_2d_bin = patch_view.mean(axis=3).mean(axis=1)
+        return body_2d_bin
+
+    @staticmethod
+    def preprocess_mrcFile(micrograph):
+        """Do preprocess to the micrograph after the micrograph data is loaded into a numpy.array.
+
+        Define this function to make sure that the same process is done to the micrograph
+            during the training process and picking process.
+
+        Args:
+            micrograph: numpy.array, the shape is (micrograph_col, micrograph_row)
+
+        Returns:
+            return micrograph
+            micrograph: numpy.array
+        """
+        # mrc_col = micrograph.shape[0]
+        # mrc_row = micrograph.shape[1]
+        # lowpass
+        micrograph = scipy.ndimage.filters.gaussian_filter(micrograph, 0.1)
+        # do the bin process
+        pooling_size = 3
+        micrograph = MrcDataLoader.bin_2d(micrograph, pooling_size)
+
+        # low pass the micrograph
+        # micrograph_lowpass = scipy.ndimage.filters.gaussian_filter(micrograph, 0.1)
+        # f = np.fft.fft2(micrograph)
+        # fshift = np.fft.fftshift(f)
+        # magnitude_spectrum = 20*np.log(np.abs(fshift))
+
+        # plt.subplot(121),plt.imshow(micrograph, cmap = 'gray')
+        # plt.title('Input Image'), plt.xticks([]), plt.yticks([])
+        # plt.subplot(122),plt.imshow(micrograph_lowpass, cmap = 'gray')
+        # plt.title('Magnitude Spectrum'), plt.xticks([]), plt.yticks([])
+        # plt.show()
+
+        # nomalize the patch
+        # max_value = micrograph.max()
+        # min_value = micrograph.min()
+        # particle = (micrograph - min_value) / (max_value - min_value)
+        mean_value = micrograph.mean()
+        std_value = micrograph.std()
+        micrograph = (micrograph - mean_value) / std_value
+        #
+        return micrograph, pooling_size
+
+    @staticmethod
+    def read_coordinate_from_star(starfile):
+        """ Read the coordinate from star file.
+        return a list
+
+        Args:
+            starfile: string, the input coodinate star file.
+
+        Returns:
+            return coordinate_list
+            coordinate_list: list, the length of the list stands for the number of particles.
+                             Each particle is a list too, which contains two elements.
+                             The first one is the x coordinate, the second one is y coordinate.
+        """
+        particle_star = starRead(starfile)
+        table_star = particle_star.getByName('data_')
+        coordinateX_list = table_star.getByName('_rlnCoordinateX')
+        coordinateY_list = table_star.getByName('_rlnCoordinateY')
+        coordinate_list = []
+        for i in range(len(coordinateX_list)):
+            coordinate = []
+            coordinate.append(int(float(coordinateX_list[i])))
+            coordinate.append(int(float(coordinateY_list[i])))
+            coordinate_list.append(coordinate)
+        return coordinate_list
+
+    @staticmethod
+    def preprocess_particle(valid_positive_particle, model_input_size):
+        """Do preprocess to the particle patch after the particle data is extracted from the micrograph.
+
+        Define this function to make sure that the same process is done to the particle
+                    during the training process and picking process.
+
+        Args:
+            particle: numpy.array, the shape is (particle_col, particle_row)
+            model_input_size: a list with length 4. The size is to fit with the model input.
+                                      model_input_size[0] stands for the batchsize.
+                                      model_input_size[1] stands for the input col.
+                                      model_input_size[2] stands for the input row.
+                                      model_input_size[3] stands for the input channel.
+        Returns:
+            return particle
+            particle: numpy.array
+        """
+        valid_positive_particle = scipy.misc.imresize(valid_positive_particle, ())
 
     @staticmethod
     def load_Particle_From_mrcFileDir(trainInputDir, particle_size, model_input_size, coordinate_symbol, mrc_number,
@@ -57,9 +177,45 @@ class MrcDataLoader(object):
         if mrc_number <= 0 | mrc_number > len(valid_mrc_file):
             mrc_number = len(valid_mrc_file)
 
+
         positive_particles = []
         negative_particles = []
+        particle_number_sum = 0
+        for i in range(mrc_number):
+            print(valid_mrc_file[i])
+            mrc = mrcfile.open(valid_mrc_file[i], mode='r+')
+            body_2d, bin_size = MrcDataLoader.preprocess_mrcFile(mrc.data)
 
+            coordinate = MrcDataLoader.read_coordinate_from_star(coordinate_file[i])
+            particle_size = int(particle_size // bin_size)
+            n_col = int(mrc.header[0]/bin_size)
+            n_row = int(mrc .header[0]/bin_size)
+            for i in range(len(coordinate)):
+                coordinate[i][0] //= bin_size
+                coordinate[i][1] //= bin_size
+
+            radius = int(particle_size/2)
+            i = 0
+            while i < len(coordinate):
+                coord_x = coordinate[i][0]
+                coord_y = coordinate[i][1]
+                if coord_x < radius or coord_x + radius > n_col or coord_y < radius or coord_y + radius > n_row:
+                    coordinate.pop(i)
+                else:
+                    # extract positive particles
+                    coord_x = coordinate[i][0]
+                    coord_y = coordinate[i][1]
+                    valid_positive_particle = body_2d[coord_x - radius : coord_x + radius, coord_y - radius : coord_y + radius]
+                    valid_positive_particle = MrcDataLoader.preprocess_particle(valid_positive_particle, model_input_size)
+
+                    i += 1
+
+            particle_number = len(coordinate)
+            particle_number_sum += particle_number
+            print 'number of particles:', particle_number_sum
+
+            # for i in range(coordinate):
+            #     coord_x = coordinate[i]
 
 
     @staticmethod
@@ -87,7 +243,7 @@ class MrcDataLoader(object):
         Raises:
             None
         """
-        particle_array_positive, particle_array_negative = MrcDataLoader.load_Particle_From_mrcFileDir(train_inputDir, particle_size, model_input_size, mrc_number)
+        particle_array_positive, particle_array_negative = MrcDataLoader.load_Particle_From_mrcFileDir(train_inputDir, particle_size, model_input_size, coordinate_symbol, mrc_number)
 
 
         return particle_array_positive, particle_array_negative
