@@ -37,8 +37,15 @@ def train():
     model_input_size = [100, 64, 64, 1]
 
     # dataLoader = MrcDataLoader()
-    particle_array_positive, particle_array_negative = MrcDataLoader.load_trainData_From_mrcFileDir(train_inputDir, particle_size, model_input_size, validation_ratio, coordinate_symbol, mrc_number, positive_particle_number)
+    train_data, train_label, eval_data, eval_label = MrcDataLoader.load_trainData_From_mrcFileDir(train_inputDir, particle_size, model_input_size, validation_ratio, coordinate_symbol, mrc_number, positive_particle_number)
 
+    try:
+        train_data
+    except NameError:
+        print("ERROR: in function load.loadInputTrainData.")
+        return None
+    else:
+        print("Load training data successfully!")
 
 def main(argv=None):
     train()

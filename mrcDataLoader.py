@@ -3,7 +3,9 @@ import os
 import re
 import numpy as np
 import scipy.ndimage
+import scipy.misc
 from starReader import starRead
+from pylab import *
 
 
 class MrcDataLoader(object):
@@ -107,7 +109,7 @@ class MrcDataLoader(object):
         return coordinate_list
 
     @staticmethod
-    def preprocess_particle(valid_positive_particle, model_input_size):
+    def preprocess_particle(particle, model_input_size):
         """Do preprocess to the particle patch after the particle data is extracted from the micrograph.
 
         Define this function to make sure that the same process is done to the particle
@@ -124,7 +126,11 @@ class MrcDataLoader(object):
             return particle
             particle: numpy.array
         """
-        valid_positive_particle = scipy.misc.imresize(valid_positive_particle, ())
+        particle = scipy.misc.imresize(particle, (model_input_size[1], model_input_size[2]), interp='bilinear', mode = 'L')
+        mean_value = particle.mean()
+        std_value = particle.std()
+        particle = (particle - mean_value)/std_value
+        return particle
 
     @staticmethod
     def load_Particle_From_mrcFileDir(trainInputDir, particle_size, model_input_size, coordinate_symbol, mrc_number,
@@ -180,7 +186,7 @@ class MrcDataLoader(object):
 
         positive_particles = []
         negative_particles = []
-        particle_number_sum = 0
+        positive_particle_number_sum = 0
         for i in range(mrc_number):
             print(valid_mrc_file[i])
             mrc = mrcfile.open(valid_mrc_file[i], mode='r+')
@@ -188,18 +194,19 @@ class MrcDataLoader(object):
 
             coordinate = MrcDataLoader.read_coordinate_from_star(coordinate_file[i])
             particle_size = int(particle_size // bin_size)
-            n_col = int(mrc.header[0]/bin_size)
-            n_row = int(mrc .header[0]/bin_size)
+            # print type(mrc.header)
+            sha = mrc.data.shape
+            n_col = int(sha[0]/bin_size)
+            n_row = int(sha[1]/bin_size)
             for i in range(len(coordinate)):
                 coordinate[i][0] //= bin_size
                 coordinate[i][1] //= bin_size
-
             radius = int(particle_size/2)
             i = 0
             while i < len(coordinate):
                 coord_x = coordinate[i][0]
                 coord_y = coordinate[i][1]
-                if coord_x < radius or coord_x + radius > n_col or coord_y < radius or coord_y + radius > n_row:
+                if coord_x < radius or coord_x + radius > n_row or coord_y < radius or coord_y + radius > n_col:
                     coordinate.pop(i)
                 else:
                     # extract positive particles
@@ -207,13 +214,38 @@ class MrcDataLoader(object):
                     coord_y = coordinate[i][1]
                     valid_positive_particle = body_2d[coord_x - radius : coord_x + radius, coord_y - radius : coord_y + radius]
                     valid_positive_particle = MrcDataLoader.preprocess_particle(valid_positive_particle, model_input_size)
-
+                    positive_particles.append(valid_positive_particle)
                     i += 1
 
-            particle_number = len(coordinate)
-            particle_number_sum += particle_number
-            print 'number of particles:', particle_number_sum
+            positive_particle_number_sum += len(coordinate)
+            print 'number of positive particles:', positive_particle_number_sum
 
+            if produce_negative:
+                for i in range(len(coordinate)):
+                    while True:
+                        isLegal = True
+                        coord_x = np.random.randint(radius, n_row - radius)
+                        coord_y = np.random.randint(radius, n_col - radius)
+                        for j in range(len(coordinate)):
+                            distance = ((coord_x - coordinate[j][0]) ** 2 + (coord_y - coordinate[j][1]) ** 2) ** 0.5
+                            if distance < negative_distance_ratio * particle_size:
+                                isLegal = False
+                                break
+                        if isLegal:
+                            valid_negative_particle = body_2d[coord_x - radius: coord_x + radius,
+                                                      coord_y - radius: coord_y + radius]
+                            valid_negative_particle = MrcDataLoader.preprocess_particle(valid_negative_particle,
+                                                                                        model_input_size)
+                            negative_particles.append(valid_negative_particle)
+                            break
+
+            #close the mrc file
+            mrc.close()
+
+        if produce_negative:
+            return positive_particles, negative_particles
+        else:
+            return positive_particles
             # for i in range(coordinate):
             #     coord_x = coordinate[i]
 
@@ -245,6 +277,21 @@ class MrcDataLoader(object):
         """
         particle_array_positive, particle_array_negative = MrcDataLoader.load_Particle_From_mrcFileDir(train_inputDir, particle_size, model_input_size, coordinate_symbol, mrc_number)
 
+        #todo: we can just extract positive_particle_number particles rather than extract len(particle_array_positive) particles than throw some part.
+        if positive_particle_number > 0 & positive_particle_number < len(particle_array_positive):
+            particle_array_positive = particle_array_positive[:positive_particle_number]
+            particle_array_negative = particle_array_negative[:positive_particle_number]
 
-        return particle_array_positive, particle_array_negative
+
+
+        validation_size = int(validation_ratio * len(particle_array_positive))
+        validation_data = particle_array_positive[:validation_size, ...]
+        validation_data = concatenate((validation_data, particle_array_negative[:validation_size, ...]))
+        validation_labels = concatenate((ones(validation_size, dtype=int64), zeros(validation_size, dtype=int64)))
+
+        train_size = positive_particle_number - validation_size
+        train_data = particle_array_positive[validation_size:, ...]
+        train_labels = concatenate((ones(train_size, dtype=int64), zeros(train_size, dtype=int64)))
+
+        return train_data, train_labels, validation_data, validation_labels
 
