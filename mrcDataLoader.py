@@ -180,7 +180,7 @@ class MrcDataLoader(object):
                 valid_mrc_file.append(mrc_file_all[i])
                 coordinate_file.append(filename_coordinate)
 
-        if mrc_number <= 0 | mrc_number > len(valid_mrc_file):
+        if mrc_number <= 0 or mrc_number > len(valid_mrc_file):
             mrc_number = len(valid_mrc_file)
 
 
@@ -191,9 +191,8 @@ class MrcDataLoader(object):
             print(valid_mrc_file[i])
             mrc = mrcfile.open(valid_mrc_file[i], mode='r+')
             body_2d, bin_size = MrcDataLoader.preprocess_mrcFile(mrc.data)
-
+            particle_size_bin = int(particle_size // bin_size)
             coordinate = MrcDataLoader.read_coordinate_from_star(coordinate_file[i])
-            particle_size = int(particle_size // bin_size)
             # print type(mrc.header)
             sha = mrc.data.shape
             n_col = int(sha[0]/bin_size)
@@ -201,7 +200,7 @@ class MrcDataLoader(object):
             for i in range(len(coordinate)):
                 coordinate[i][0] //= bin_size
                 coordinate[i][1] //= bin_size
-            radius = int(particle_size/2)
+            radius = int(particle_size_bin/2)
             i = 0
             while i < len(coordinate):
                 coord_x = coordinate[i][0]
@@ -228,7 +227,7 @@ class MrcDataLoader(object):
                         coord_y = np.random.randint(radius, n_col - radius)
                         for j in range(len(coordinate)):
                             distance = ((coord_x - coordinate[j][0]) ** 2 + (coord_y - coordinate[j][1]) ** 2) ** 0.5
-                            if distance < negative_distance_ratio * particle_size:
+                            if distance < negative_distance_ratio * particle_size_bin:
                                 isLegal = False
                                 break
                         if isLegal:
@@ -278,19 +277,21 @@ class MrcDataLoader(object):
         particle_array_positive, particle_array_negative = MrcDataLoader.load_Particle_From_mrcFileDir(train_inputDir, particle_size, model_input_size, coordinate_symbol, mrc_number)
 
         #todo: we can just extract positive_particle_number particles rather than extract len(particle_array_positive) particles than throw some part.
-        if positive_particle_number > 0 & positive_particle_number < len(particle_array_positive):
+        if positive_particle_number > 0 and positive_particle_number < len(particle_array_positive):
             particle_array_positive = particle_array_positive[:positive_particle_number]
             particle_array_negative = particle_array_negative[:positive_particle_number]
 
-
+        #need shuffle here
+        np.random.shuffle(particle_array_positive)
+        np.random.shuffle(particle_array_negative)
 
         validation_size = int(validation_ratio * len(particle_array_positive))
-        validation_data = particle_array_positive[:validation_size, ...]
-        validation_data = concatenate((validation_data, particle_array_negative[:validation_size, ...]))
+        validation_data = particle_array_positive[:validation_size]
+        validation_data = concatenate((validation_data, particle_array_negative[:validation_size]))
         validation_labels = concatenate((ones(validation_size, dtype=int64), zeros(validation_size, dtype=int64)))
 
-        train_size = positive_particle_number - validation_size
-        train_data = particle_array_positive[validation_size:, ...]
+        train_size = len(particle_array_positive) - validation_size
+        train_data = particle_array_positive[validation_size:]
         train_labels = concatenate((ones(train_size, dtype=int64), zeros(train_size, dtype=int64)))
 
         return train_data, train_labels, validation_data, validation_labels

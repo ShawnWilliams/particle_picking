@@ -5,6 +5,11 @@ import mrcDataLoader
 from optparse import OptionParser
 from mrcDataLoader import MrcDataLoader
 
+def shuffle_related_data(data, label):
+    assert len(data) == len(label)
+    shuffle_index = np.random.permutation(len(data))
+    return data[shuffle_index], label[shuffle_index]
+
 def train():
     parser = OptionParser()
     parser.add_option("--train_inputDir", dest="train_inputDir", help="Input Directory", metavar="DIRECTORY")
@@ -46,6 +51,8 @@ def train():
         return None
     else:
         print("Load training data successfully!")
+
+    train_data, train_label = shuffle_related_data(train_data, train_label)
 
 def main(argv=None):
     train()
