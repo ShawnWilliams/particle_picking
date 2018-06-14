@@ -53,6 +53,12 @@ def train():
         print("Load training data successfully!")
 
     train_data, train_label = shuffle_related_data(train_data, train_label)
+    eval_data, eval_label = shuffle_related_data(eval_data, eval_label)
+
+
+    learning_rate = 0.01
+    learning_rate_decay_factor = 0.95
+    learning_rate_staircase = True
 
 def main(argv=None):
     train()
