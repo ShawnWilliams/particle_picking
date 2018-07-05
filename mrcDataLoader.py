@@ -197,24 +197,24 @@ class MrcDataLoader(object):
             sha = mrc.data.shape
             n_col = int(sha[0]/bin_size)
             n_row = int(sha[1]/bin_size)
-            for i in range(len(coordinate)):
-                coordinate[i][0] //= bin_size
-                coordinate[i][1] //= bin_size
+            for k in range(len(coordinate)):
+                coordinate[k][0] //= bin_size
+                coordinate[k][1] //= bin_size
             radius = int(particle_size_bin/2)
-            i = 0
-            while i < len(coordinate):
-                coord_x = coordinate[i][0]
-                coord_y = coordinate[i][1]
+            j = 0
+            while j < len(coordinate):
+                coord_x = coordinate[j][0]
+                coord_y = coordinate[j][1]
                 if coord_x < radius or coord_x + radius > n_row or coord_y < radius or coord_y + radius > n_col:
-                    coordinate.pop(i)
+                    coordinate.pop(j)
                 else:
                     # extract positive particles
-                    coord_x = coordinate[i][0]
-                    coord_y = coordinate[i][1]
-                    valid_positive_particle = body_2d[coord_x - radius : coord_x + radius, coord_y - radius : coord_y + radius]
+                    coord_x = coordinate[j][0]
+                    coord_y = coordinate[j][1]
+                    valid_positive_particle = body_2d[coord_y - radius : coord_y + radius, coord_x - radius : coord_x + radius]
                     valid_positive_particle = MrcDataLoader.preprocess_particle(valid_positive_particle, model_input_size)
                     positive_particles.append(valid_positive_particle)
-                    i += 1
+                    j += 1
 
             positive_particle_number_sum += len(coordinate)
             print 'number of positive particles:', positive_particle_number_sum
@@ -231,8 +231,8 @@ class MrcDataLoader(object):
                                 isLegal = False
                                 break
                         if isLegal:
-                            valid_negative_particle = body_2d[coord_x - radius: coord_x + radius,
-                                                      coord_y - radius: coord_y + radius]
+                            valid_negative_particle = body_2d[coord_y - radius: coord_y + radius,
+                                                      coord_x - radius: coord_x + radius]
                             valid_negative_particle = MrcDataLoader.preprocess_particle(valid_negative_particle,
                                                                                         model_input_size)
                             negative_particles.append(valid_negative_particle)
@@ -292,6 +292,7 @@ class MrcDataLoader(object):
 
         train_size = len(particle_array_positive) - validation_size
         train_data = particle_array_positive[validation_size:]
+        train_data = concatenate((train_data, particle_array_negative[validation_size:]))
         train_labels = concatenate((ones(train_size, dtype=int64), zeros(train_size, dtype=int64)))
 
         return train_data, train_labels, validation_data, validation_labels
