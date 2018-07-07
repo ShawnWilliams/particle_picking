@@ -139,3 +139,29 @@ class CnnModel(object):
                 predictions[begin:,:] = batch_predictions[begin - data_size:, :]
 
         return predictions
+
+    def init_model_graph_evaluate(self):
+        self.kernel1 = self.__variable_with_weight_decay('weights1', shape=[9, 9, 1, 8], stddev=0.05, wd = 0.0)
+        self.bias1 = tf.get_variable('bias1', [8], initializer=tf.constant_initializer(0.0))
+
+        self.kernel2 = self.__variable_with_weight_decay('weights2', shape=[5, 5, 8, 16], stddev=0.05, wd = 0.0)
+        self.bias2 = tf.get_variable('bias2', [16], initializer=tf.constant_initializer(0.0))
+
+        self.kernel3 = self.__variable_with_weight_decay('weights3', shape=[3, 3, 16, 32], stddev=0.05, wd = 0.0)
+        self.bias3 = tf.get_variable('bias3', [32], initializer=tf.constant_initializer(0.0))
+
+        self.kernel4 = self.__variable_with_weight_decay('weights4', shape=[2, 2, 32, 64], stddev=0.05, wd = 0.0)
+        self.bias4 = tf.get_variable('bias4', [64], initializer=tf.constant_initializer(0.0))
+
+        dim = 64 * 2 * 2
+
+        self.weights_fc1 = self.__variable_with_weight_decay('weights_fc1', shape=[dim, 128], stddev=0.05, wd = 0.0005)
+        self.bias_fc1 = tf.get_variable('bias_fc1', [128], initializer=tf.constant_initializer(0.0))
+
+        self.weights_fc2 = self.__variable_with_weight_decay('weights_fc2', shape=[128, self.num_class], stddev=0.05, wd = 0.0005)
+        self.bias_fc2 = tf.get_variable('bias_fc2', [self.num_class], initializer=tf.constant_initializer(0.0))
+
+        self.eval_data_node = tf.placeholder(tf.float32, shape=(self.batch_size, self.num_col, self.num_row, self.num_channel))
+
+        evaluation_logits = self.__inference(self.eval_data_node, train=False)
+        self.evaluation_prediction_operation = tf.nn.softmax(evaluation_logits)
