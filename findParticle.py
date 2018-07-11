@@ -34,8 +34,8 @@ def find_particle():
     coordinate_symbol = opt.coordinate_symbol
     mrc_number = int(opt.mrc_number)
 
-    if not os.path.isfile(trained_model):
-        print("Error: %s is not a valid model file." %trained_model)
+    # if not os.path.isfile(trained_model):
+    #     print("Error: %s is not a valid model file." %trained_model)
 
     if not os.path.isdir(input_dir):
         print("Error: %s is not a valid input directory." %input_dir)
@@ -60,12 +60,21 @@ def find_particle():
     with tf.Session() as sess:
         saver = tf.train.Saver()
         saver.restore(sess, trained_model)
+        # saver.restore(sess, './mini_trained_model/shawn_test_model.ckpt')
 
         particleFinder = ParticleFinder(sess, model_input_size, cnnModel, particle_size)
         start_time = time.time()
         candidate_particle_all = []
         for i in range(mrc_number):
             coordinate = particleFinder.pick(mrc_file_all[i])
+            candidate_particle_all.append(coordinate)
+            particleFinder.write_coordinate(coordinate, mrc_file_all[i], coordinate_symbol, threshold, output_dir)
+        time_cost = time.time() - start_time
+        print("All time cost: %.1f s"%time_cost)
+
+        # write the pick all results(threshold=0) to file
+        output_file = os.path.join(output_dir, 'autopick_results.pickle')
+        particleFinder.write_pick_results(candidate_particle_all, output_file)
 
 
 def main():

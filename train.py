@@ -1,3 +1,5 @@
+from __future__ import division
+
 import os.path
 import numpy as np
 import tensorflow as tf
@@ -27,7 +29,7 @@ def train():
     parser.add_option("--positive_particle_number", dest="positive_particle_number", help="Number of positive samples to train.", metavar="VALUE", default=-1)
     parser.add_option("--coordinate_symbol", dest="coordinate_symbol", help="The symbol of the coordinate file, like '_manualPick'", metavar="STRING")
     parser.add_option("--particle_size", dest="particle_size", help="the size of the particle.", metavar="VALUE", default=-1)
-    parser.add_option("--validation_ratio", dest="validation_ratio", help="the ratio.", metavar="VALUE", default=0.1)
+    parser.add_option("--validation_ratio", dest="validation_ratio", help="the ratio.", metavar="VALUE", default=0.2)
     parser.add_option("--model_save_dir", dest="model_save_dir", help="save the model to this directory", metavar="DIRECTORY", default="./trained_model")
     parser.add_option("--model_save_file", dest="model_save_file", help="save the model to file", metavar="FILE")
     (opt, args) = parser.parse_args()
@@ -98,11 +100,12 @@ def train():
 
     init = tf.initialize_all_variables()
 
+    init_toleration_patience = 5
     with tf.Session(config=tf.ConfigProto(log_device_placement=False)) as sess:
         sess.run(init)
         max_epochs = 200
         best_eval_error_rate = 100
-        toleration_patience = 10
+        toleration_patience = init_toleration_patience
         eval_frequency = train_size // batch_size   # the frequency to evaluate the evaluation dataset
         for step in xrange( int(max_epochs * train_size) // batch_size):
             offset =  (step * batch_size) % (train_size - batch_size)
@@ -121,7 +124,7 @@ def train():
                 error_rate(train_prediction, batch_label), eval_error_rate))
                 if eval_error_rate < best_eval_error_rate:
                     best_eval_error_rate = eval_error_rate
-                    toleration_patience = 10
+                    toleration_patience = init_toleration_patience
                 else:
                     toleration_patience -= 1
             if toleration_patience == 0:

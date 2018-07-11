@@ -274,7 +274,7 @@ class MrcDataLoader(object):
         Raises:
             None
         """
-        particle_array_positive, particle_array_negative = MrcDataLoader.load_Particle_From_mrcFileDir(train_inputDir, particle_size, model_input_size, coordinate_symbol, mrc_number)
+        particle_array_positive, particle_array_negative = MrcDataLoader.load_Particle_From_mrcFileDir(train_inputDir, particle_size, model_input_size, coordinate_symbol, mrc_number, True, 0.24)
 
         #todo: we can just extract positive_particle_number particles rather than extract len(particle_array_positive) particles than throw some part.
         if positive_particle_number > 0 and positive_particle_number < len(particle_array_positive):
